@@ -223,6 +223,7 @@ function label(t){return t.title}
 var MODES={
  boss:{name:"Monster Battle",desc:"Spell words to defeat the monster. Lose 3 hearts and it wins."},
  sling:{name:"Sling Showdown",desc:"Every word you spell earns a shot. Knock out the monsters."},
+ bridge:{name:"Bridge Builder",desc:"Every word you spell adds a plank. Build the bridge so the critter can cross."},
  listen:{name:"Listen and Spell",desc:"Hear the word, then type it."},
  gaps:{name:"Missing Letters",desc:"Tap the letters that fill the gaps."},
  scramble:{name:"Unscramble",desc:"Put the mixed-up letters in order."},
@@ -261,7 +262,9 @@ function badgeDefs(){
    {id:"streak10",name:"Unstoppable",desc:"Get 10 right in a row.",icon:"bolt",tone:"accent"},
    {id:"perfect",name:"Perfect Round",desc:"Finish a round with no misses.",icon:"check",tone:"good"},
    {id:"sling_win",name:"Sharpshooter",desc:"Clear a level in Sling Showdown.",icon:"star",tone:"good"},
-   {id:"sling_all",name:"Sling Champion",desc:"Clear 5 levels in one Sling Showdown game.",icon:"crown",tone:"bad"}];
+   {id:"sling_all",name:"Sling Champion",desc:"Clear 5 levels in one Sling Showdown game.",icon:"crown",tone:"bad"},
+   {id:"bridge_win",name:"Bridge Builder",desc:"Finish a bridge in Bridge Builder.",icon:"check",tone:"good"},
+   {id:"bridge_all",name:"Master Builder",desc:"Build 5 bridges in one Bridge Builder game.",icon:"crown",tone:"accent"}];
   TESTS.forEach(function(t,i){
     d.push({id:"boss:"+t.id,name:"Monster Slayer",desc:"Beat the monster in "+label(t)+".",icon:"heart",tone:"bad"});
     d.push({id:"master:"+t.id,name:"Word Master",desc:"Get 3 stars on every word in "+label(t)+".",icon:"crown",tone:"accent"});
@@ -350,6 +353,10 @@ function start(kind){
     G={kind:"sling",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
     return step();
   }
+  if(kind==="bridge"){
+    G={kind:"bridge",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
+    return step();
+  }
   if(kind==="boss"){
     var its=shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}});
     G={kind:"boss",items:its,i:0,right:0,missed:[],streak:0,best:0,requeued:{},boss:{hp:its.length,max:its.length,hearts:3,k:CUR.sort,state:"idle"}};
@@ -369,6 +376,7 @@ function header(){
 }
 function step(){
   if(G.kind==="sling")return slingStep();
+  if(G.kind==="bridge")return bridgeStep();
   if(G.i>=G.items.length||(G.boss&&(G.boss.hp<=0||G.boss.hearts<=0)))return end();
   var it=G.items[G.i];
   if(G.kind==="flash")return flash(it.o);
@@ -390,6 +398,7 @@ function finish(word,ok,solved){
   if(ok){unlock("first_star");if(G.streak===5)unlock("streak5");if(G.streak===10)unlock("streak10")}
   if(CUR&&CUR.words.every(function(o){return(prog[o.w]||0)>=3}))unlock("master:"+CUR.id);
   if(G.kind==="sling"&&S&&solved){S.ammo++;SFX.ding();slingUI();toast("+1 shot! Pull back the sling.")}
+  if(G.kind==="bridge"&&S&&S.kind==="bridge"&&solved){S.bank++;toast("+1 plank! Watch it drop in.")}
   if(G.boss){
     if(ok){G.boss.hp=Math.max(0,G.boss.hp-1);updateBoss("hurt")}
     else{G.boss.hearts--;updateBoss("idle");
@@ -399,7 +408,7 @@ function finish(word,ok,solved){
 }
 function feedback(ok,word,msg){
   var fb=document.getElementById("fb");
-  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+(G.kind==="sling"?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
+  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+((G.kind==="sling"||G.kind==="bridge")?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
   var nx=document.getElementById("nx");nx.onclick=step;nx.focus();
 }
 function speakBtn(text,label){return '<button class="btn" data-sp="'+esc(text)+'"><span class="spk">&#128266; '+label+'</span></button>'}
@@ -548,6 +557,7 @@ var SFX={
  crack:function(){noise(.2,.28,900);tone(320,70,.16,"square",.12)},
  pop:function(){tone(420,950,.1,"sine",.22);tone(950,220,.16,"triangle",.14,.07)},
  ding:function(){tone(660,660,.12,"sine",.18);tone(990,990,.2,"sine",.18,.1)},
+ plank:function(){tone(240,170,.09,"square",.12);tone(520,300,.1,"triangle",.1,.03)},
  level:function(){[523,659,784,1047].forEach(function(f,i){tone(f,f,.2,"triangle",.2,i*.12)})}
 };
 function sfxRate(name,gap){if(!S)return false;S.sf=S.sf||{};if((S.f||0)-(S.sf[name]||-99)<gap)return false;S.sf[name]=S.f||0;return true}
@@ -681,8 +691,8 @@ function tick(){
 function loop(t){
   if(!S||S.stop||!document.body.contains(S.cv))return;
   var dt=Math.min(50,t-(S.last||t));S.last=t;S.acc+=dt;
-  while(S.acc>=16.67&&S){S.acc-=16.67;tick()}
-  if(S){draw();S.raf=requestAnimationFrame(loop)}
+  while(S.acc>=16.67&&S){S.acc-=16.67;if(S.kind==="bridge")btick();else tick()}
+  if(S){if(S.kind==="bridge")bdraw();else draw();S.raf=requestAnimationFrame(loop)}
 }
 function zippy(c,x,y,r){
   c.fillStyle="#19b5a5";c.beginPath();c.arc(x,y,r,0,6.283);c.fill();
@@ -757,6 +767,116 @@ function slingEnd(){
    '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
    '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
   document.getElementById("again").onclick=function(){start("sling")};
+  var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
+  document.getElementById("hm").onclick=home;
+}
+
+/* Bridge Builder: every word spelled lays one plank. A full bridge lets the critter cross to the next island.
+   Each new river is a little wider (up to 8 planks), and levels keep coming for as long as there are words. */
+var BX=170,BY=250,BMAX=8,BR=22;
+function bridgePW(n){return Math.floor(Math.min(92,440/n))}
+function bridgeNeed(n){return Math.min(BMAX,2+n)}
+function buildBridge(){
+  app.innerHTML='<div class="row"><button class="btn ghost" id="quit">Home</button><span class="pill" id="b-planks"></span><span class="pill" id="b-lvl"></span><span class="pill" id="b-done"></span><button class="pill" id="snd" aria-pressed="true"></button></div>'+
+   '<div class="arena"><canvas id="cv" aria-label="Bridge game. Spell words to lay planks and help the critter cross the river."></canvas></div><p class="sentence" id="aimhint"></p><div id="qa"></div>';
+  var cv=document.getElementById("cv"),dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=SW*dpr;cv.height=SH*dpr;
+  S={kind:"bridge",cv:cv,ctx:cv.getContext("2d"),dpr:dpr,level:1,need:bridgeNeed(1),pw:bridgePW(bridgeNeed(1)),placed:0,bank:0,planks:[],wx:BX-46,hop:0,phase:"build",tt:0,cleared:0,laid:0,fx:[],last:0,acc:0,stop:false,raf:0,f:0};
+  document.getElementById("quit").onclick=function(){stopArena();home()};
+  var sb=document.getElementById("snd");
+  function sbl(){sb.textContent="Sound: "+(soundOn?"On":"Off");sb.setAttribute("aria-pressed",soundOn?"true":"false")}
+  sb.onclick=function(){soundOn=!soundOn;try{localStorage.setItem("twins_sound",soundOn?"1":"0")}catch(e){}sbl();if(soundOn)SFX.ding()};
+  sbl();
+  bridgeUI();S.raf=requestAnimationFrame(loop);
+}
+function bridgeUI(){
+  if(!S||S.kind!=="bridge")return;
+  var a=function(id,t){var e=document.getElementById(id);if(e)e.textContent=t};
+  a("b-planks","Planks: "+S.placed+" / "+S.need);a("b-lvl","Level "+S.level);a("b-done","Bridges built: "+S.cleared);
+  var left=S.need-S.placed,h="";
+  if(S.phase==="cross")h="The bridge is done. Here we go!";
+  else if(S.phase==="trans")h="Made it! A new river is ahead.";
+  else h=S.placed===0&&S.bank===0?"Spell a word to lay the first plank.":left>0?left+" more plank"+(left>1?"s":"")+" to finish the bridge.":"Almost there...";
+  a("aimhint",h);
+}
+function btick(){
+  S.f++;
+  S.fx.forEach(function(f){f.x+=f.vx;f.y+=f.vy;f.vy+=.2;f.life--});S.fx=S.fx.filter(function(f){return f.life>0});
+  if(S.phase==="build"){
+    var falling=S.planks.some(function(p){return!p.landed});
+    if(!falling&&S.bank>0&&S.placed<S.need){S.bank--;S.planks.push({i:S.placed,dy:-190,vy:0,landed:false});S.placed++;S.laid++;SFX.plank();bridgeUI()}
+    S.planks.forEach(function(p){
+      if(p.landed)return;p.vy+=.9;p.dy+=p.vy;
+      if(p.dy>=0){p.dy=0;p.landed=true;if(sfxRate("thud",3))SFX.thud();puff(BX+p.i*S.pw+S.pw/2,BY,"#c98a4b")}
+    });
+    if(S.placed>=S.need&&S.planks.every(function(p){return p.landed})){S.phase="cross";bridgeUI()}
+  }else if(S.phase==="cross"){
+    S.wx+=2.6;S.hop=Math.abs(Math.sin(S.f*.25))*6;
+    if(S.f%14===0)SFX.stretch(10);
+    if(S.wx>=BX+S.need*S.pw+40){
+      S.phase="trans";S.tt=0;S.hop=0;S.cleared++;unlock("bridge_win");if(S.cleared>=5)unlock("bridge_all");
+      SFX.level();toast("Bridge "+S.cleared+" built! New river ahead.");bridgeUI();
+    }
+  }else{
+    S.tt++;
+    if(S.tt===22){S.level++;S.need=bridgeNeed(S.level);S.pw=bridgePW(S.need);S.placed=0;S.planks=[];S.wx=BX-46;bridgeUI()}
+    if(S.tt>=44){S.phase="build";bridgeUI()}
+  }
+}
+function bdraw(){
+  var c=S.ctx;c.setTransform(S.dpr,0,0,S.dpr,0,0);
+  var sky=getComputedStyle(document.documentElement).getPropertyValue("--tile").trim()||"#e3ebfd";
+  c.fillStyle=sky;c.fillRect(0,0,SW,SH);
+  c.fillStyle="#f6c453";c.beginPath();c.arc(700,64,26,0,6.283);c.fill();
+  c.fillStyle="rgba(255,255,255,.8)";
+  [[110,70],[400,48],[560,112]].forEach(function(p,i){var x=((p[0]+S.f*.15*(i+1))%900)-60;c.beginPath();c.arc(x,p[1],17,0,6.283);c.arc(x+20,p[1]-8,21,0,6.283);c.arc(x+42,p[1],16,0,6.283);c.fill()});
+  var RX=BX+S.need*S.pw;
+  c.fillStyle="#3b82c4";c.fillRect(BX,BY+24,RX-BX,SH-BY-24);
+  c.strokeStyle="rgba(255,255,255,.55)";c.lineWidth=2;c.lineCap="round";
+  for(var wx=BX+14;wx<RX-14;wx+=36){var wy=BY+64+Math.sin((S.f+wx)*.07)*3;c.beginPath();c.moveTo(wx,wy);c.quadraticCurveTo(wx+9,wy-5,wx+18,wy);c.stroke()}
+  c.fillStyle="#7b5a3c";c.fillRect(0,BY,BX,SH-BY);c.fillRect(RX,BY,SW-RX,SH-BY);
+  c.fillStyle="#5a9b5f";c.fillRect(0,BY,BX,10);c.fillRect(RX,BY,SW-RX,10);
+  c.setLineDash([6,5]);c.strokeStyle="rgba(90,60,30,.55)";c.lineWidth=2;
+  for(var i=S.placed;i<S.need;i++)c.strokeRect(BX+i*S.pw+1,BY+1,S.pw-2,13);
+  c.setLineDash([]);
+  S.planks.forEach(function(p){
+    var x=BX+p.i*S.pw,y=BY+p.dy;
+    c.fillStyle="#c98a4b";c.fillRect(x+1,y,S.pw-2,14);c.strokeStyle="#7a4f23";c.lineWidth=2;c.strokeRect(x+1,y,S.pw-2,14);
+    c.beginPath();c.moveTo(x+8,y+7);c.lineTo(x+S.pw-8,y+7);c.stroke();
+  });
+  if(S.phase!=="build"||(S.placed>=S.need&&S.planks.every(function(p){return p.landed}))){
+    c.strokeStyle="#6b4423";c.lineWidth=4;
+    c.beginPath();c.moveTo(BX-4,BY);c.lineTo(BX-4,BY-34);c.moveTo(RX+4,BY);c.lineTo(RX+4,BY-34);c.stroke();
+    c.lineWidth=3;c.beginPath();c.moveTo(BX-4,BY-34);c.quadraticCurveTo((BX+RX)/2,BY-14,RX+4,BY-34);c.stroke();
+  }
+  zippy(c,S.wx,BY-BR-(S.hop||0),BR);
+  S.fx.forEach(function(f){c.globalAlpha=Math.max(0,f.life/30);c.fillStyle=f.c;c.beginPath();c.arc(f.x,f.y,4,0,6.283);c.fill()});c.globalAlpha=1;
+  if(S.phase==="trans"){var a=S.tt<22?S.tt/22:(44-S.tt)/22;c.globalAlpha=Math.max(0,Math.min(1,a));c.fillStyle=sky;c.fillRect(0,0,SW,SH);c.globalAlpha=1}
+}
+function bridgeStep(){
+  if(!S)buildBridge();
+  if(G.i>=G.items.length)return bridgeDone();
+  var it=G.items[G.i];
+  document.getElementById("qa").innerHTML='<section class="card prompt" id="stage"></section><div id="fb"></div>';
+  if(it.mg==="listen")listen(it.o);else builder(it.o,it.mg==="gaps");
+}
+function bridgeDone(){
+  var qa=document.getElementById("qa");if(!qa||!S)return;
+  var left=Math.max(0,S.need-S.placed-S.bank);
+  var msg="All words done. "+(left>0?"The bridge still needs "+left+" more plank"+(left>1?"s":"")+", but you built "+S.cleared+" bridge"+(S.cleared===1?"":"s")+".":"Great building!");
+  qa.innerHTML='<section class="card prompt"><div class="tag">Bridge Builder</div><h2>'+msg+'</h2><div class="row"><button class="btn" id="fin">Finish game</button></div></section>';
+  document.getElementById("fin").onclick=bridgeEnd;
+  bridgeUI();
+}
+function bridgeEnd(){
+  var st=S,br=st?st.cleared:0,pl=st?st.laid:0,all=br>=5,n=G.items.length;
+  var uniq=G.missed.filter(function(w,i){return G.missed.indexOf(w)===i});
+  stopArena();
+  app.innerHTML='<section class="card prompt"><div class="tag">Bridge Builder results</div><div class="score">'+br+' bridge'+(br===1?"":"s")+'</div>'+
+   '<h2>'+(all?"Master Builder! 5 or more bridges built.":br>0?"Nice building! "+pl+" planks laid.":"Good try. Spell more words to lay more planks.")+'</h2>'+
+   '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
+   '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
+  document.getElementById("again").onclick=function(){start("bridge")};
   var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
   document.getElementById("hm").onclick=home;
 }
