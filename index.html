@@ -97,6 +97,9 @@ input.type{width:100%;font-family:var(--display);font-size:1.7rem;font-weight:60
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:99px;font-weight:800;z-index:10;max-width:90vw;text-align:center}
 .arena{border:2px solid var(--line);border-radius:16px;overflow:hidden;background:var(--tile)}
 .arena canvas{display:block;width:100%;height:auto;aspect-ratio:2/1;touch-action:none;cursor:grab}
+.etools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.etool{background:var(--tile);color:var(--ink);border:2px solid var(--line);box-shadow:none}
+.etool.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pill{font:inherit;color:inherit;cursor:pointer;font-weight:800;font-size:.9rem;background:var(--surface);border:2px solid var(--line);border-radius:99px;padding:4px 12px;white-space:nowrap}
 .rep{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 12px;border-radius:10px;background:var(--tile);width:100%}
 .rep b{font-family:var(--display);font-weight:600}
@@ -223,6 +226,7 @@ function label(t){return t.title}
 var MODES={
  boss:{name:"Monster Battle",desc:"Spell words to defeat the monster. Lose 3 hearts and it wins."},
  sling:{name:"Sling Showdown",desc:"Every word you spell earns a shot. Knock out the monsters."},
+ eng:{name:"Bridge Engineer",desc:"Spell a word, then design a real bridge. A heavy truck tests it. Build it right to level up."},
  bridge:{name:"Bridge Builder",desc:"Every word you spell adds a plank. Build the bridge so the critter can cross."},
  listen:{name:"Listen and Spell",desc:"Hear the word, then type it."},
  gaps:{name:"Missing Letters",desc:"Tap the letters that fill the gaps."},
@@ -264,7 +268,9 @@ function badgeDefs(){
    {id:"sling_win",name:"Sharpshooter",desc:"Clear a level in Sling Showdown.",icon:"star",tone:"good"},
    {id:"sling_all",name:"Sling Champion",desc:"Clear 5 levels in one Sling Showdown game.",icon:"crown",tone:"bad"},
    {id:"bridge_win",name:"Bridge Builder",desc:"Finish a bridge in Bridge Builder.",icon:"check",tone:"good"},
-   {id:"bridge_all",name:"Master Builder",desc:"Build 5 bridges in one Bridge Builder game.",icon:"crown",tone:"accent"}];
+   {id:"bridge_all",name:"Master Builder",desc:"Build 5 bridges in one Bridge Builder game.",icon:"crown",tone:"accent"},
+   {id:"eng_win",name:"Bridge Engineer",desc:"Design a bridge the truck can cross.",icon:"check",tone:"good"},
+   {id:"eng_all",name:"Chief Engineer",desc:"Design 5 working bridges in one Bridge Engineer game.",icon:"crown",tone:"accent"}];
   TESTS.forEach(function(t,i){
     d.push({id:"boss:"+t.id,name:"Monster Slayer",desc:"Beat the monster in "+label(t)+".",icon:"heart",tone:"bad"});
     d.push({id:"master:"+t.id,name:"Word Master",desc:"Get 3 stars on every word in "+label(t)+".",icon:"crown",tone:"accent"});
@@ -353,6 +359,10 @@ function start(kind){
     G={kind:"sling",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
     return step();
   }
+  if(kind==="eng"){
+    G={kind:"eng",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
+    return step();
+  }
   if(kind==="bridge"){
     G={kind:"bridge",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
     return step();
@@ -377,6 +387,7 @@ function header(){
 function step(){
   if(G.kind==="sling")return slingStep();
   if(G.kind==="bridge")return bridgeStep();
+  if(G.kind==="eng")return engineerStep();
   if(G.i>=G.items.length||(G.boss&&(G.boss.hp<=0||G.boss.hearts<=0)))return end();
   var it=G.items[G.i];
   if(G.kind==="flash")return flash(it.o);
@@ -398,6 +409,7 @@ function finish(word,ok,solved){
   if(ok){unlock("first_star");if(G.streak===5)unlock("streak5");if(G.streak===10)unlock("streak10")}
   if(CUR&&CUR.words.every(function(o){return(prog[o.w]||0)>=3}))unlock("master:"+CUR.id);
   if(G.kind==="sling"&&S&&solved){S.ammo++;SFX.ding();slingUI();toast("+1 shot! Pull back the sling.")}
+  if(G.kind==="eng"&&S&&S.kind==="eng"&&solved){S.pending=true}
   if(G.kind==="bridge"&&S&&S.kind==="bridge"&&solved){S.bank++;toast("+1 plank! Watch it drop in.")}
   if(G.boss){
     if(ok){G.boss.hp=Math.max(0,G.boss.hp-1);updateBoss("hurt")}
@@ -408,7 +420,7 @@ function finish(word,ok,solved){
 }
 function feedback(ok,word,msg){
   var fb=document.getElementById("fb");
-  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+((G.kind==="sling"||G.kind==="bridge")?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
+  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+((G.kind==="eng"&&S&&S.pending)?"Build a bridge!":(G.kind==="sling"||G.kind==="bridge"||G.kind==="eng")?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
   var nx=document.getElementById("nx");nx.onclick=step;nx.focus();
 }
 function speakBtn(text,label){return '<button class="btn" data-sp="'+esc(text)+'"><span class="spk">&#128266; '+label+'</span></button>'}
@@ -691,8 +703,8 @@ function tick(){
 function loop(t){
   if(!S||S.stop||!document.body.contains(S.cv))return;
   var dt=Math.min(50,t-(S.last||t));S.last=t;S.acc+=dt;
-  while(S.acc>=16.67&&S){S.acc-=16.67;if(S.kind==="bridge")btick();else tick()}
-  if(S){if(S.kind==="bridge")bdraw();else draw();S.raf=requestAnimationFrame(loop)}
+  while(S.acc>=16.67&&S){S.acc-=16.67;if(S.kind==="bridge")btick();else if(S.kind==="eng")etick();else tick()}
+  if(S){if(S.kind==="bridge")bdraw();else if(S.kind==="eng")edraw();else draw();S.raf=requestAnimationFrame(loop)}
 }
 function zippy(c,x,y,r){
   c.fillStyle="#19b5a5";c.beginPath();c.arc(x,y,r,0,6.283);c.fill();
@@ -877,6 +889,362 @@ function bridgeEnd(){
    '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
    '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
   document.getElementById("again").onclick=function(){start("bridge")};
+  var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
+  document.getElementById("hm").onclick=home;
+}
+
+/* Bridge Engineer: spell a word right, then design a real bridge. Beams are springs, joints are pinned, gravity pulls,
+   and a heavy truck drives across. Triangles stay strong; squares wobble. Beat the level and the next river is wider. */
+var EU=40,EGR=600,ESUB=24,EMAXL=3.2,EJ0=-3,EJ1=2,EM0=3.2,EMD=0.3,EMMAX=9,ESAG=0.5;
+var EMAT={
+  road:{k:50000,ft:9000,fc:9000,w:.05,cost:3,col:"#c58a4e",edge:"#7a4f23",wd:9},
+  steel:{k:100000,ft:30000,fc:45000,w:.08,cost:5,col:"#8795bd",edge:"#46527a",wd:5}
+};
+function engCfg(n){
+  var G=Math.min(13,4+n);
+  return{G:G,M:Math.min(EMMAX,EM0+n*EMD),walls:n<=4?2:1};
+}
+function engRef(G){
+  var h=G<=5?1:G<=9?2:3,nodes=[],beams=[],i;
+  function B(i1,j1,i2,j2,t){beams.push([i1,j1,i2,j2,t])}
+  for(i=0;i<G;i++)B(i,0,i+1,0,"road");
+  for(i=1;i<G;i++)B(i,0,i,-h,"steel");
+  for(i=1;i<G-1;i++)B(i,-h,i+1,-h,"steel");
+  B(0,0,1,-h,"steel");B(G,0,G-1,-h,"steel");
+  for(i=1;i<G-1;i++){
+    if(i+1<=G/2)B(i,-h,i+1,0,"steel");else B(i+1,-h,i,0,"steel");
+  }
+  return beams;
+}
+function engCost(len,type){return Math.max(1,Math.round(len/EU*EMAT[type].cost))}
+function engRefCost(G){return engRef(G).reduce(function(s,b){return s+engCost(Math.hypot(b[2]-b[0],b[3]-b[1])*EU,b[4])},0)}
+function engBudget(n,G){var mg=Math.max(1.35,2.3-n*.1);return Math.ceil(engRefCost(G)*mg/5)*5}
+function engLevel(n){
+  var c=engCfg(n),G=c.G;
+  S.level=n;S.G=G;S.M=c.M;S.LX=Math.round((SW-G*EU)/2);S.RX=S.LX+G*EU;S.CY=190;S.WY=S.CY+Math.round(2.4*EU);S.Z=Math.min(1.6,600/(G*EU));S.OY=215;
+  S.nodes=[];S.beams=[];S.sel=null;S.hist=[];S.hint=false;S.msg="";S.budget=engBudget(n,G);
+  S.truck={x:26,y:S.CY,vy:0,ang:0,state:"wait",t:0,sup:null};
+  var j;
+  for(j=0;j<=c.walls;j++){engMk(0,j,true);engMk(G,j,true)}
+  S.fx=[];S.sparks=[];
+}
+function engMk(i,j,fixed){
+  var n={i:i,j:j,x:S.LX+i*EU,y:S.CY+j*EU,hx:0,hy:0,vx:0,vy:0,fx:0,fy:0,m:1,fixed:!!fixed};
+  n.hx=n.x;n.hy=n.y;S.nodes.push(n);return n;
+}
+function engAt(i,j){for(var k=0;k<S.nodes.length;k++){var n=S.nodes[k];if(n.i===i&&n.j===j)return n}return null}
+function engScr(x,y){return{x:(x-SW/2)*S.Z+SW/2,y:(y-S.CY)*S.Z+S.OY}}
+function engGridOk(i,j){return i>=0&&i<=S.G&&j>=EJ0&&j<=EJ1}
+function engSpent(){return S.beams.reduce(function(s,b){return s+b.cost},0)}
+function engLeft(){return S.budget-engSpent()}
+function engSnap(){
+  return JSON.stringify({n:S.nodes.filter(function(n){return!n.fixed}).map(function(n){return[n.i,n.j]}),
+    b:S.beams.map(function(b){return[b.A.i,b.A.j,b.B.i,b.B.j,b.type]})});
+}
+function engRestore(js){
+  var d=JSON.parse(js);S.nodes=S.nodes.filter(function(n){return n.fixed});S.beams=[];S.sel=null;
+  d.n.forEach(function(p){engMk(p[0],p[1],false)});
+  d.b.forEach(function(p){engPush(engAt(p[0],p[1]),engAt(p[2],p[3]),p[4])});
+}
+function engPush(A,B,type){
+  var L=Math.hypot(B.hx-A.hx,B.hy-A.hy);
+  var b={A:A,B:B,type:type,L:L,cost:engCost(L,type),r:0,F:0,dead:false,k:0,c:0,ft:0,fc:0};
+  S.beams.push(b);return b;
+}
+function engTry(A,gi,gj,type){
+  if(!A){S.msg="Start from a dot.";return false}
+  if(!engGridOk(gi,gj)){S.msg="Build between the cliffs.";return false}
+  var Bn=engAt(gi,gj);
+  if(A===Bn)return false;
+  if(!Bn&&(gi===0||gi===S.G)){S.msg="Join the cliff at a bolt.";return false}
+  var len=Math.hypot(gi-A.i,gj-A.j);
+  if(len>EMAXL+1e-6){S.msg="Too long! A beam can reach about 3 squares.";return false}
+  var cost=engCost(len*EU,type);
+  if(cost>engLeft()){S.msg="Not enough money left for that beam.";return false}
+  if(Bn&&S.beams.some(function(b){return(b.A===A&&b.B===Bn)||(b.A===Bn&&b.B===A)})){S.msg="There is already a beam there.";return false}
+  S.hist.push(engSnap());if(S.hist.length>40)S.hist.shift();
+  if(!Bn)Bn=engMk(gi,gj,false);
+  engPush(A,Bn,type);S.msg="";SFX.plank();engUI();return Bn;
+}
+function engClean(){
+  S.nodes=S.nodes.filter(function(n){return n.fixed||S.beams.some(function(b){return b.A===n||b.B===n})});
+}
+function engErase(x,y){
+  var best=null,bd=14;
+  S.beams.forEach(function(b){
+    var ax=b.A.x,ay=b.A.y,bx=b.B.x,by=b.B.y,dx=bx-ax,dy=by-ay,t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy)));
+    var d=Math.hypot(x-(ax+dx*t),y-(ay+dy*t));if(d<bd){bd=d;best=b}
+  });
+  var nb=null,nd=14;
+  S.nodes.forEach(function(n){if(n.fixed)return;var d=Math.hypot(x-n.x,y-n.y);if(d<nd){nd=d;nb=n}});
+  if(!best&&!nb)return;
+  S.hist.push(engSnap());
+  if(nb)S.beams=S.beams.filter(function(b){return b.A!==nb&&b.B!==nb});else S.beams=S.beams.filter(function(b){return b!==best});
+  engClean();S.sel=null;SFX.thud();engUI();
+}
+/* ---------- physics ---------- */
+function engPrep(){
+  S.nodes.forEach(function(n){n.m=.6;n.vx=n.vy=0;n.x=n.hx;n.y=n.hy});
+  S.beams.forEach(function(b){var m=EMAT[b.type],w=m.w*b.L/EU;b.A.m+=w/2;b.B.m+=w/2;b.dead=false;b.r=0;b.F=0;
+    b.k=m.k*EU/b.L;b.ft=m.ft;b.fc=m.fc*Math.min(1,1.2*EU/b.L)});
+  S.beams.forEach(function(b){var ma=b.A.fixed?b.B.m:b.A.m,mb=b.B.fixed?b.A.m:b.B.m;b.c=2*.35*Math.sqrt(b.k*(ma*mb/(ma+mb)))});
+  S.truck={x:26,y:S.CY,vy:0,ang:0,state:"drive",t:0,sup:null,out:""};
+}
+function engReset(){
+  S.nodes.forEach(function(n){n.x=n.hx;n.y=n.hy;n.vx=n.vy=0});
+  S.beams.forEach(function(b){b.dead=false;b.r=0;b.F=0});
+  S.truck={x:26,y:S.CY,vy:0,ang:0,state:"wait",t:0,sup:null,out:""};
+}
+function engSupport(x){
+  var best=null,by=1e9;
+  for(var i=0;i<S.beams.length;i++){
+    var b=S.beams[i];if(b.dead||b.type!=="road")continue;
+    var x1=b.A.x,x2=b.B.x;if(x1>x2){var q=x1;x1=x2;x2=q}
+    if(x<x1||x>x2||x2-x1<1)continue;
+    var t=(x-b.A.x)/(b.B.x-b.A.x),y=b.A.y+(b.B.y-b.A.y)*t;
+    if(y<by){by=y;best={b:b,t:t,y:y}}
+  }
+  return best;
+}
+function engSub(h){
+  var N=S.nodes,B=S.beams,i,T=S.truck;
+  for(i=0;i<N.length;i++){var n=N[i];n.fx=0;n.fy=n.fixed?0:n.m*EGR}
+  for(i=0;i<B.length;i++){
+    var b=B[i];if(b.dead)continue;
+    var A=b.A,C=b.B,dx=C.x-A.x,dy=C.y-A.y,d=Math.sqrt(dx*dx+dy*dy)||1e-6,ux=dx/d,uy=dy/d;
+    var Fe=b.k*(d-b.L),rv=(C.vx-A.vx)*ux+(C.vy-A.vy)*uy,F=Fe+b.c*rv;
+    A.fx+=F*ux;A.fy+=F*uy;C.fx-=F*ux;C.fy-=F*uy;
+    b.F=Fe;var r=Fe>=0?Fe/b.ft:-Fe/b.fc;b.r=b.r*.85+r*.15;
+    if(b.r>1){b.dead=true;S.snap=true;if(S.sparks.length<80)for(var k=0;k<6;k++)S.sparks.push({x:(A.x+C.x)/2,y:(A.y+C.y)/2,vx:(Math.random()-.5)*5,vy:-Math.random()*4,life:30,c:EMAT[b.type].col})}
+  }
+  if(T.sup){
+    var sb=T.sup.b;
+    if(!sb.dead){var W=S.M*EGR,t=T.sup.t;sb.A.fy+=W*(1-t);sb.B.fy+=W*t}
+  }
+  for(i=0;i<N.length;i++){
+    var m=N[i];if(m.fixed)continue;
+    m.vx+=m.fx/m.m*h;m.vy+=m.fy/m.m*h;m.vx*=.9985;m.vy*=.9985;
+    m.x+=m.vx*h;m.y+=m.vy*h;
+  }
+}
+function engStepFrame(){
+  var T=S.truck,i;
+  if(T.state==="drive"){
+    T.x+=S.speed||2.6;
+    var s=T.x>S.LX&&T.x<S.RX?engSupport(T.x):null;
+    if(s){T.sup=s;T.y=s.y;var b=s.b;T.ang=Math.atan2(b.B.y-b.A.y,b.B.x-b.A.x);if(T.ang>1.2||T.ang<-1.2)T.ang=0;if(b.B.x<b.A.x)T.ang=Math.atan2(b.A.y-b.B.y,b.A.x-b.B.x)}
+    else if(T.x<=S.LX||T.x>=S.RX){T.sup=null;T.y=S.CY;T.ang=0}
+    else{T.sup=null;T.vy+=.55;T.y+=T.vy;T.ang=Math.min(.5,T.ang+.02);T.state="lost";T.out="fell";SFX.crack()}
+    if(T.state==="drive"&&T.y>S.CY+EU*ESAG){T.state="lost";T.out="sag";T.sup=null;SFX.crack()}
+    if(T.state==="drive"&&T.x>=S.RX+EU*1.6){T.state="won"}
+  }else if(T.state==="lost"){
+    T.sup=null;T.vy+=.55;T.y+=T.vy;
+  }
+  var h=1/60/ESUB;
+  for(i=0;i<ESUB;i++)engSub(h);
+  if(S.snap){S.snap=false;if(sfxRate("snap",6))SFX.crack()}
+  if(T.state==="won"||T.state==="lost"){T.t++;
+    if(T.t===60){engResult(T.state==="won")}}
+}
+function engCheck(){ /* run a whole trip instantly: used by tests */
+  engPrep();var n=0;while(S.truck.t<62&&n<4000){engStepFrame();n++}
+  var T=S.truck;return{won:T.state==="won",out:T.out,dead:S.beams.filter(function(b){return b.dead}).length,maxr:Math.max.apply(null,[0].concat(S.beams.map(function(b){return b.r})))}
+}
+function etick(){
+  S.f++;
+  S.sparks.forEach(function(p){p.x+=p.vx;p.y+=p.vy;p.vy+=.25;p.life--});S.sparks=S.sparks.filter(function(p){return p.life>0});
+  if(S.mode==="test"||S.mode==="result")engStepFrame();
+  else if(S.celebrate>0){S.celebrate--}
+}
+/* ---------- drawing ---------- */
+function engCol(r){r=Math.max(0,Math.min(1,r));return"hsl("+Math.round(205-205*r)+",78%,"+(46+8*(1-r))+"%)"}
+function edraw(){
+  var c=S.ctx;c.setTransform(S.dpr,0,0,S.dpr,0,0);
+  var sky=getComputedStyle(document.documentElement).getPropertyValue("--tile").trim()||"#e3ebfd";
+  c.fillStyle=sky;c.fillRect(0,0,SW,SH);
+  c.fillStyle="#f6c453";c.beginPath();c.arc(730,56,24,0,6.283);c.fill();
+  c.fillStyle="rgba(255,255,255,.8)";
+  [[120,60],[420,40]].forEach(function(p,i){var x=((p[0]+S.f*.12*(i+1))%900)-60;c.beginPath();c.arc(x,p[1],16,0,6.283);c.arc(x+20,p[1]-7,20,0,6.283);c.arc(x+40,p[1],15,0,6.283);c.fill()});
+  var LX=S.LX,RX=S.RX,CY=S.CY,WY=S.WY;
+  c.save();c.translate(SW/2,S.OY);c.scale(S.Z,S.Z);c.translate(-SW/2,-CY);
+  c.fillStyle="#3b82c4";c.fillRect(LX,WY,RX-LX,700);
+  c.strokeStyle="rgba(255,255,255,.55)";c.lineWidth=2;c.lineCap="round";
+  for(var wx=LX+14;wx<RX-14;wx+=36){var wy=WY+18+Math.sin((S.f+wx)*.07)*3;c.beginPath();c.moveTo(wx,wy);c.quadraticCurveTo(wx+9,wy-5,wx+18,wy);c.stroke()}
+  c.fillStyle="#7b5a3c";c.fillRect(-700,CY,LX+700,700);c.fillRect(RX,CY,SW-RX+700,700);
+  c.fillStyle="#5a9b5f";c.fillRect(-700,CY,LX+700,9);c.fillRect(RX,CY,SW-RX+700,9);
+  c.strokeStyle="rgba(0,0,0,.12)";c.lineWidth=2;
+  for(var sy=CY+50;sy<CY+400;sy+=46){c.beginPath();c.moveTo(-700,sy);c.lineTo(LX-6,sy+4);c.moveTo(RX+6,sy+4);c.lineTo(SW+700,sy);c.stroke()}
+  var editing=S.mode==="edit";
+  if(editing){
+    c.fillStyle="rgba(19,32,67,.22)";
+    for(var gi=1;gi<S.G;gi++)for(var gj=EJ0;gj<=EJ1;gj++){c.beginPath();c.arc(LX+gi*EU,CY+gj*EU,2.2,0,6.283);c.fill()}
+  }
+  if(S.hint){
+    c.setLineDash([6,5]);c.strokeStyle="rgba(23,138,76,.75)";c.lineWidth=3;
+    engRef(S.G).forEach(function(b){c.beginPath();c.moveTo(LX+b[0]*EU,CY+b[1]*EU);c.lineTo(LX+b[2]*EU,CY+b[3]*EU);c.stroke()});
+    c.setLineDash([]);
+  }
+  var testing=S.mode==="test"||S.mode==="result";
+  S.beams.forEach(function(b){
+    if(b.dead)return;var m=EMAT[b.type];
+    c.lineCap="butt";c.strokeStyle=m.edge;c.lineWidth=m.wd+3;c.beginPath();c.moveTo(b.A.x,b.A.y);c.lineTo(b.B.x,b.B.y);c.stroke();
+    c.strokeStyle=testing?engCol(b.r):m.col;c.lineWidth=m.wd;c.beginPath();c.moveTo(b.A.x,b.A.y);c.lineTo(b.B.x,b.B.y);c.stroke();
+  });
+  if(S.mode==="edit"&&S.pd&&S.pd.n&&S.pm){
+    var g=S.hoverG,ok=g&&engGridOk(g.i,g.j)&&Math.hypot(g.i-S.pd.n.i,g.j-S.pd.n.j)<=EMAXL+1e-6;
+    c.setLineDash([5,5]);c.lineWidth=4;c.strokeStyle=ok?(S.tool==="steel"?EMAT.steel.edge:EMAT.road.edge):"#c62f3d";
+    c.beginPath();c.moveTo(S.pd.n.x,S.pd.n.y);if(g)c.lineTo(LX+g.i*EU,CY+g.j*EU);else c.lineTo(S.pm.x,S.pm.y);c.stroke();c.setLineDash([]);
+  }
+  S.nodes.forEach(function(n){
+    c.beginPath();
+    if(n.fixed){c.fillStyle="#46527a";c.fillRect(n.x-6,n.y-6,12,12);c.fillStyle="#fff";c.beginPath();c.arc(n.x,n.y,2.2,0,6.283);c.fill()}
+    else{c.fillStyle="#fff";c.strokeStyle="#132043";c.lineWidth=2.5;c.arc(n.x,n.y,6,0,6.283);c.fill();c.stroke()}
+    if(S.sel===n&&editing){c.strokeStyle="#f5a800";c.lineWidth=3.5;c.beginPath();c.arc(n.x,n.y,11,0,6.283);c.stroke()}
+  });
+  if(editing&&S.hoverG&&engGridOk(S.hoverG.i,S.hoverG.j)){c.strokeStyle="rgba(47,91,234,.7)";c.lineWidth=2;c.beginPath();c.arc(LX+S.hoverG.i*EU,CY+S.hoverG.j*EU,9,0,6.283);c.stroke()}
+  etruck(c,S.truck);
+  S.sparks.forEach(function(p){c.globalAlpha=Math.max(0,p.life/30);c.fillStyle=p.c;c.fillRect(p.x-2,p.y-2,4,4)});c.globalAlpha=1;
+  c.restore();
+  if(S.celebrate>0){c.globalAlpha=Math.min(1,S.celebrate/30);c.font="800 44px Fredoka, sans-serif";c.textAlign="center";c.fillStyle="#f5a800";c.strokeStyle="#132043";c.lineWidth=6;c.strokeText("Bridge built!",SW/2,90);c.fillText("Bridge built!",SW/2,90);c.globalAlpha=1;c.textAlign="start"}
+}
+function etruck(c,T){
+  c.save();c.translate(T.x,T.y);c.rotate(T.ang||0);
+  c.fillStyle="#e8503a";c.strokeStyle="#132043";c.lineWidth=2;
+  c.beginPath();c.rect(-28,-30,38,20);c.fill();c.stroke();
+  c.fillStyle="#f58a3a";c.beginPath();c.moveTo(10,-30);c.lineTo(22,-30);c.lineTo(30,-18);c.lineTo(30,-10);c.lineTo(10,-10);c.closePath();c.fill();c.stroke();
+  c.fillStyle="#bfe3ff";c.fillRect(14,-27,8,8);
+  c.fillStyle="#2b2f45";[-16,18].forEach(function(wx){c.beginPath();c.arc(wx,-8,8,0,6.283);c.fill();c.fillStyle="#cfd4e6";c.beginPath();c.arc(wx,-8,3,0,6.283);c.fill();c.fillStyle="#2b2f45"});
+  c.fillStyle="#132043";c.font="800 11px Nunito, sans-serif";c.textAlign="center";c.fillText(S.M.toFixed(0)+" t",-9,-16);c.textAlign="start";
+  c.restore();
+}
+/* ---------- screens ---------- */
+function buildEng(){
+  app.innerHTML='<div class="row"><button class="btn ghost" id="quit">Home</button><span class="pill" id="e-lvl"></span><span class="pill" id="e-bud"></span><span class="pill" id="e-trip"></span><button class="pill" id="snd" aria-pressed="true"></button></div>'+
+   '<div class="arena"><canvas id="cv" aria-label="Bridge Engineer. Build a bridge so the truck can cross the river."></canvas></div><p class="sentence" id="aimhint"></p><div id="qa"></div>';
+  var cv=document.getElementById("cv"),dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=SW*dpr;cv.height=SH*dpr;
+  S={kind:"eng",cv:cv,ctx:cv.getContext("2d"),dpr:dpr,cleared:0,mode:"idle",tool:"road",pending:false,trips:0,celebrate:0,last:0,acc:0,stop:false,raf:0,f:0,speed:2.6,sf:{}};
+  engLevel(1);
+  document.getElementById("quit").onclick=function(){stopArena();home()};
+  var sb=document.getElementById("snd");
+  function sbl(){sb.textContent="Sound: "+(soundOn?"On":"Off");sb.setAttribute("aria-pressed",soundOn?"true":"false")}
+  sb.onclick=function(){soundOn=!soundOn;try{localStorage.setItem("twins_sound",soundOn?"1":"0")}catch(e){}sbl();if(soundOn)SFX.ding()};
+  sbl();
+  function pt(ev){var r=cv.getBoundingClientRect(),sx=(ev.clientX-r.left)*SW/r.width,sy=(ev.clientY-r.top)*SH/r.height;return{x:(sx-SW/2)/S.Z+SW/2,y:(sy-S.OY)/S.Z+S.CY}}
+  function snap(p){var i=Math.round((p.x-S.LX)/EU),j=Math.round((p.y-S.CY)/EU);return engGridOk(i,j)&&Math.hypot(p.x-(S.LX+i*EU),p.y-(S.CY+j*EU))<EU*.55?{i:i,j:j}:null}
+  cv.addEventListener("pointerdown",function(ev){
+    if(!S||S.mode!=="edit")return;ev.preventDefault();var p=pt(ev);
+    try{cv.setPointerCapture(ev.pointerId)}catch(e){}
+    if(S.tool==="erase"){engErase(p.x,p.y);return}
+    var g=snap(p);S.pm=p;S.hoverG=g;
+    S.pd={n:g?engAt(g.i,g.j):null,x:p.x,y:p.y};
+    if(!S.pd.n&&!S.sel)S.msg="Start from a dot or bolt (tap a joint first).";
+    engUI();
+  });
+  cv.addEventListener("pointermove",function(ev){
+    if(!S||S.mode!=="edit")return;var p=pt(ev);S.pm=p;S.hoverG=snap(p);
+  });
+  cv.addEventListener("pointerup",function(ev){
+    if(!S||S.mode!=="edit"||S.tool==="erase")return;ev.preventDefault();
+    var p=pt(ev),g=snap(p),st=S.pd;S.pd=null;S.pm=null;
+    if(!g){S.msg="Let go on a dot.";engUI();return}
+    var nUp=engAt(g.i,g.j);
+    if(st&&st.n&&st.n!==nUp){S.sel=null;engTry(st.n,g.i,g.j,S.tool)}
+    else if(st&&st.n&&st.n===nUp){
+      if(S.sel&&S.sel!==nUp){var a=S.sel;S.sel=null;var nb=engTry(a,g.i,g.j,S.tool);if(nb)S.sel=nb}
+      else S.sel=S.sel===nUp?null:nUp;
+    }else if(S.sel){var a2=S.sel;S.sel=null;var nb2=engTry(a2,g.i,g.j,S.tool);if(nb2)S.sel=nb2}
+    engUI();
+  });
+  cv.addEventListener("pointercancel",function(){if(S){S.pd=null;S.pm=null}});
+  engUI();S.raf=requestAnimationFrame(loop);
+}
+function engUI(){
+  if(!S||S.kind!=="eng")return;
+  var a=function(id,t){var e=document.getElementById(id);if(e)e.textContent=t};
+  a("e-lvl","Level "+S.level+" | Bridges: "+S.cleared);
+  a("e-bud","Money: $"+engLeft()+" / $"+S.budget);
+  a("e-trip",S.mode==="idle"?"Truck trips: 0":"Truck trips: "+S.trips);
+  var h="";
+  if(S.mode==="idle")h=S.pending?"":(S.beams.length?"Your bridge is waiting. Spell a word right to work on it.":"Spell a word right to earn a turn building a bridge.");
+  else if(S.mode==="edit")h=S.msg||(S.beams.length?"Triangles make a bridge strong. Test it when you are ready.":"Join the bolts across the river. Drag from a dot to another dot. Brown road is for the truck to drive on.");
+  else if(S.mode==="test")h="Here comes the "+S.M.toFixed(0)+" ton truck...";
+  else h=S.result||"";
+  a("aimhint",h);
+  document.querySelectorAll(".etool").forEach(function(b){b.classList.toggle("on",b.dataset.t===S.tool)});
+}
+function engWorkshop(){
+  S.mode="edit";S.trips=2;S.msg="";S.result="";engReset();
+  var qa=document.getElementById("qa");
+  qa.innerHTML='<section class="card"><div class="tag">Your turn to build. Make it strong enough for the truck!</div>'+
+   '<div class="etools"><button class="btn etool" data-t="road">Road</button><button class="btn etool" data-t="steel">Steel</button><button class="btn etool" data-t="erase">Erase</button>'+
+   '<button class="btn ghost" id="e-undo">Undo</button><button class="btn ghost" id="e-clear">Clear</button><button class="btn ghost" id="e-hint">Hint</button></div>'+
+   '<p class="sentence" style="margin:10px 0 0">Road is cheap and the truck drives on it. Steel is stronger and costs more. Beams can be about 3 squares long. Green lines in Hint show one way to do it.</p>'+
+   '<div class="row" style="margin-top:12px"><button class="btn" id="e-test">Test the truck</button><button class="btn ghost" id="e-back">Back to spelling</button></div></section>';
+  qa.querySelectorAll(".etool").forEach(function(b){b.onclick=function(){S.tool=b.dataset.t;S.sel=null;S.msg="";engUI()}});
+  document.getElementById("e-undo").onclick=function(){if(S.mode!=="edit"||!S.hist.length)return;engRestore(S.hist.pop());engUI()};
+  document.getElementById("e-clear").onclick=function(){if(S.mode!=="edit"||!S.beams.length)return;S.hist.push(engSnap());S.beams=[];engClean();S.sel=null;engUI()};
+  document.getElementById("e-hint").onclick=function(){S.hint=!S.hint;this.textContent=S.hint?"Hide hint":"Hint"};
+  document.getElementById("e-test").onclick=engTest;
+  document.getElementById("e-back").onclick=engClose;
+  engUI();
+}
+function engTest(){
+  if(S.mode!=="edit")return;
+  if(!S.beams.some(function(b){return b.type==="road"})){S.msg="The truck needs a road. Build some brown road beams across the river.";engUI();return}
+  S.trips--;S.sel=null;S.pd=null;S.mode="test";S.hint=false;
+  engPrep();SFX.pop();
+  var qa=document.getElementById("qa");qa.innerHTML='<section class="card"><div class="tag">Testing</div><p class="sentence">Beams turn from blue to red as they carry more load.</p></section>';
+  engUI();
+}
+function engResult(won){
+  if(!S||S.kind!=="eng")return;
+  S.mode="result";var qa=document.getElementById("qa");
+  if(won){
+    S.cleared++;unlock("eng_win");if(S.cleared>=5)unlock("eng_all");
+    S.celebrate=90;SFX.level();
+    S.result="You did it! The truck made it across.";
+    qa.innerHTML='<section class="card prompt"><div class="tag">Bridge '+S.cleared+' built</div><h2>The truck made it across!</h2><p class="sentence">Next up: a wider river and a heavier truck.</p><div class="row"><button class="btn" id="e-go">Keep going</button></div></section>';
+    document.getElementById("e-go").onclick=function(){S.level++;engLevel(S.level);engClose()};
+  }else{
+    var why=S.truck.out==="sag"?"The bridge sagged too low.":S.truck.out==="fell"?"There was a gap in the road.":"The bridge broke.";
+    var broke=S.beams.filter(function(b){return b.dead}).length;
+    S.result=why;
+    var hint=broke>0?"Red beams were carrying too much. Add triangles near where it broke.":"Make sure brown road beams connect from one cliff bolt to the other.";
+    qa.innerHTML='<section class="card prompt"><div class="tag">Not yet</div><h2>'+why+'</h2><p class="sentence">'+hint+(S.trips>0?" You have "+S.trips+" more truck trip"+(S.trips===1?"":"s")+" for this word.":" Spell the next word to try again.")+'</p><div class="row">'+(S.trips>0?'<button class="btn" id="e-fix">Fix my bridge</button>':'')+'<button class="btn ghost" id="e-back">Back to spelling</button></div></section>';
+    var f=document.getElementById("e-fix");if(f)f.onclick=function(){var t=S.trips;engWorkshop();S.trips=t;engUI()};
+    document.getElementById("e-back").onclick=function(){engReset();engClose()};
+  }
+  engUI();
+}
+function engClose(){
+  S.mode="idle";S.pending=false;S.sel=null;S.pd=null;S.hint=false;engReset();engUI();
+  G.i>=G.items.length?engineerDone():engineerStep();
+}
+function engineerStep(){
+  if(!S)buildEng();
+  if(S.pending&&S.mode==="idle")return engWorkshop();
+  if(G.i>=G.items.length)return engineerDone();
+  S.mode="idle";engUI();
+  var it=G.items[G.i];
+  document.getElementById("qa").innerHTML='<section class="card prompt" id="stage"></section><div id="fb"></div>';
+  if(it.mg==="listen")listen(it.o);else builder(it.o,it.mg==="gaps");
+}
+function engineerDone(){
+  var qa=document.getElementById("qa");if(!qa||!S)return;
+  qa.innerHTML='<section class="card prompt"><div class="tag">Bridge Engineer</div><h2>All words done. You built '+S.cleared+' bridge'+(S.cleared===1?"":"s")+'.</h2><div class="row"><button class="btn" id="fin">Finish game</button></div></section>';
+  document.getElementById("fin").onclick=engineerEnd;
+  engUI();
+}
+function engineerEnd(){
+  var br=S?S.cleared:0,lv=S?S.level:1,n=G.items.length;
+  var uniq=G.missed.filter(function(w,i){return G.missed.indexOf(w)===i});
+  stopArena();
+  app.innerHTML='<section class="card prompt"><div class="tag">Bridge Engineer results</div><div class="score">'+br+' bridge'+(br===1?"":"s")+'</div>'+
+   '<h2>'+(br>=5?"Master Engineer! 5 or more bridges built.":br>0?"Nice engineering! You reached level "+lv+".":"Good try. Triangles make bridges strong. Play again!")+'</h2>'+
+   '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
+   '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
+  document.getElementById("again").onclick=function(){start("eng")};
   var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
   document.getElementById("hm").onclick=home;
 }
