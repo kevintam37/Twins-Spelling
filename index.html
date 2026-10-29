@@ -108,6 +108,7 @@ input.type{width:100%;font-family:var(--display);font-size:1.7rem;font-weight:60
 </style>
 </head>
 <body>
+<script src="minigames.js?v=1"></script>
 
 
 <main id="app"></main>
@@ -226,6 +227,7 @@ function label(t){return t.title}
 var MODES={
  boss:{name:"Monster Battle",desc:"Spell words to defeat the monster. Lose 3 hearts and it wins."},
  sling:{name:"Sling Showdown",desc:"Every word you spell earns a shot. Knock out the monsters."},
+ arcade:{name:"Arcade Games",desc:"Spell words to earn plays, then pick a quick game: balloons, stars, hoops, matching, coins, gems or eggs."},
  eng:{name:"Bridge Engineer",desc:"Spell a word, then design a real bridge. A heavy truck tests it. Build it right to level up."},
  bridge:{name:"Bridge Builder",desc:"Every word you spell adds a plank. Build the bridge so the critter can cross."},
  listen:{name:"Listen and Spell",desc:"Hear the word, then type it."},
@@ -359,6 +361,10 @@ function start(kind){
     G={kind:"sling",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
     return step();
   }
+  if(kind==="arcade"){
+    G={kind:"arcade",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
+    return step();
+  }
   if(kind==="eng"){
     G={kind:"eng",items:shuffle(WORDS).map(function(o){return{o:o,mg:pickMg()}}),i:0,right:0,missed:[],streak:0,best:0};
     return step();
@@ -388,6 +394,7 @@ function step(){
   if(G.kind==="sling")return slingStep();
   if(G.kind==="bridge")return bridgeStep();
   if(G.kind==="eng")return engineerStep();
+  if(G.kind==="arcade")return arcadeStep();
   if(G.i>=G.items.length||(G.boss&&(G.boss.hp<=0||G.boss.hearts<=0)))return end();
   var it=G.items[G.i];
   if(G.kind==="flash")return flash(it.o);
@@ -410,6 +417,7 @@ function finish(word,ok,solved){
   if(CUR&&CUR.words.every(function(o){return(prog[o.w]||0)>=3}))unlock("master:"+CUR.id);
   if(G.kind==="sling"&&S&&solved){S.ammo++;SFX.ding();slingUI();toast("+1 shot! Pull back the sling.")}
   if(G.kind==="eng"&&S&&S.kind==="eng"&&solved){S.pending=true}
+  if(G.kind==="arcade"&&MGI){try{MGI.answer(!!solved)}catch(e){}}
   if(G.kind==="bridge"&&S&&S.kind==="bridge"&&solved){S.bank++;toast("+1 plank! Watch it drop in.")}
   if(G.boss){
     if(ok){G.boss.hp=Math.max(0,G.boss.hp-1);updateBoss("hurt")}
@@ -420,7 +428,7 @@ function finish(word,ok,solved){
 }
 function feedback(ok,word,msg){
   var fb=document.getElementById("fb");
-  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+((G.kind==="eng"&&S&&S.pending)?"Build a bridge!":(G.kind==="sling"||G.kind==="bridge"||G.kind==="eng")?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
+  fb.innerHTML='<div class="fb '+(ok?"good":"bad")+'"><span>'+msg+' <span class="word">'+esc(word)+'</span></span><button class="btn" id="nx">'+((G.kind==="eng"&&S&&S.pending)?"Build a bridge!":(G.kind==="sling"||G.kind==="bridge"||G.kind==="eng"||G.kind==="arcade")?(G.i>=G.items.length?"Done spelling":"Next word"):(G.i>=G.items.length?"See results":"Next"))+'</button></div>';
   var nx=document.getElementById("nx");nx.onclick=step;nx.focus();
 }
 function speakBtn(text,label){return '<button class="btn" data-sp="'+esc(text)+'"><span class="spk">&#128266; '+label+'</span></button>'}
@@ -598,7 +606,7 @@ function genLevel(n){
 function levelTemplate(n){return n<=LV.length?LV[n-1]:genLevel(n)}
 var MCOL=["#7a5cf0","#e8744f","#2aa876"];
 var S=null;
-function stopArena(){if(S){S.stop=true;if(S.raf)cancelAnimationFrame(S.raf);S=null}}
+function stopArena(){if(MGI){try{MGI.destroy()}catch(e){}MGI=null}if(S){S.stop=true;if(S.raf)cancelAnimationFrame(S.raf);S=null}}
 function buildArena(){
   app.innerHTML='<div class="row"><button class="btn ghost" id="quit">Home</button><span class="pill" id="shots"></span><span class="pill" id="lvl"></span><span class="pill" id="mleft"></span><button class="pill" id="snd" aria-pressed="true"></button></div>'+
    '<div class="arena"><canvas id="cv" aria-label="Sling game. Pull back the sling and release to launch."></canvas></div><p class="sentence" id="aimhint"></p><div id="qa"></div>';
@@ -1245,6 +1253,40 @@ function engineerEnd(){
    '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
    '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
   document.getElementById("again").onclick=function(){start("eng")};
+  var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
+  document.getElementById("hm").onclick=home;
+}
+
+/* Arcade Games: every word spelled earns plays in a quick game (shared minigames.js). Pick the game from the list above the word. */
+var MGI=null;
+function arcadeStep(){
+  if(!MGI){
+    app.innerHTML='<div class="row"><button class="btn ghost" id="quit">Home</button><div class="bar" role="progressbar"><div id="ar-bar" style="width:0%"></div></div><span class="tag" id="ar-tag"></span><span class="chip" id="streak"></span></div><div id="mgbox"></div><div id="qa"></div>';
+    document.getElementById("quit").onclick=function(){stopArena();home()};
+    var last="balloon";try{last=localStorage.getItem("twins_arcade")||"balloon"}catch(e){}
+    try{MGI=MiniGames.mount(document.getElementById("mgbox"),{game:last,select:true,onChange:function(v){try{localStorage.setItem("twins_arcade",v)}catch(e){}}})}catch(e){MGI=null}
+  }
+  var pct=Math.round(G.i/G.items.length*100);
+  document.getElementById("ar-bar").style.width=pct+"%";
+  document.getElementById("ar-tag").textContent=Math.min(G.i+1,G.items.length)+" / "+G.items.length;
+  if(G.i>=G.items.length)return arcadeDone();
+  var it=G.items[G.i];
+  document.getElementById("qa").innerHTML='<section class="card prompt" id="stage"></section><div id="fb"></div>';
+  if(it.mg==="listen")listen(it.o);else builder(it.o,it.mg==="gaps");
+}
+function arcadeDone(){
+  var qa=document.getElementById("qa");if(!qa)return;
+  qa.innerHTML='<section class="card prompt"><div class="tag">Arcade Games</div><h2>All words done. Great spelling!</h2><div class="row"><button class="btn" id="fin">Finish game</button></div></section>';
+  document.getElementById("fin").onclick=arcadeEnd;
+}
+function arcadeEnd(){
+  var n=G.items.length,uniq=G.missed.filter(function(w,i){return G.missed.indexOf(w)===i});
+  stopArena();
+  app.innerHTML='<section class="card prompt"><div class="tag">Arcade Games results</div><div class="score">'+G.right+' / '+n+'</div>'+
+   '<h2>'+(G.right===n?"Perfect spelling!":G.right>=n*.8?"Great job!":"Nice work. Keep practicing!")+'</h2>'+
+   '<p class="sentence">Spelled right on the first try: <span class="hit">'+G.right+'</span> of '+n+'. Best streak: <b>'+(G.best||0)+'</b>.'+(uniq.length?'<br>Words to practice: <span class="miss">'+uniq.join(", ")+'</span>':'')+'</p>'+
+   '<div class="row"><button class="btn" id="again">Play again</button>'+(uniq.length?'<button class="btn ghost" id="fix">Practice missed words</button>':'')+'<button class="btn ghost" id="hm">Home</button></div></section>';
+  document.getElementById("again").onclick=function(){start("arcade")};
   var fx=document.getElementById("fix");if(fx)fx.onclick=function(){practiceMissed(uniq)};
   document.getElementById("hm").onclick=home;
 }
